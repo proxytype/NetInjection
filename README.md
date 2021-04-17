@@ -11,4 +11,4 @@ Create new instance to CLR and execute .Net Payload by calling function from Man
 Injected managed code to process.
 
 ## Dummy
-Dummy application for demonstration
+Dummy application for demonstration.
