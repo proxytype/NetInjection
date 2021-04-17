@@ -5,24 +5,84 @@
 
 #pragma comment(lib, "mscoree.lib")
 
+ICLRMetaHost* pClrMetaHost = NULL;
+ICLRRuntimeInfo* pClrRuntimeInfo = NULL;
+ICLRRuntimeHost* pClrRuntimeHost = NULL;
+
+void clrCleanup() {
+    if (pClrRuntimeHost)
+    {
+        pClrRuntimeHost->Release();
+        pClrRuntimeHost = NULL;
+    }
+    if (pClrRuntimeInfo)
+    {
+        pClrRuntimeInfo->Release();
+        pClrRuntimeInfo = NULL;
+    }
+    if (pClrMetaHost)
+    {
+        pClrMetaHost->Release();
+        pClrMetaHost = NULL;
+    }
+}
+
+
+BOOL StartCLR(LPCWSTR dotNetVersion)
+{
+    HRESULT hr;
+
+    hr = CLRCreateInstance(CLSID_CLRMetaHost, IID_ICLRMetaHost, (LPVOID*)&pClrMetaHost);
+    if (hr == S_OK)
+    {
+        OutputDebugString(L"CLR INSTANCE");
+        // Get the runtime information for the particular version of .NET
+        hr = pClrMetaHost->GetRuntime(dotNetVersion, IID_PPV_ARGS(&pClrRuntimeInfo));
+        if (hr == S_OK)
+        {
+            OutputDebugString(L"CLR RUNTIME");
+
+            BOOL fLoadable;
+            hr = pClrRuntimeInfo->IsLoadable(&fLoadable);
+            if ((hr == S_OK) && fLoadable)
+            {
+                OutputDebugString(L"CLR LOADED");
+
+                hr = pClrRuntimeInfo->GetInterface(CLSID_CLRRuntimeHost,
+                    IID_PPV_ARGS(&pClrRuntimeHost));
+                if (hr == S_OK)
+                {
+                    OutputDebugString(L"CLR INTERFACE");
+                    hr = pClrRuntimeHost->Start();
+                    OutputDebugString(L"CLR START");
+                    return TRUE;
+                }
+            }
+        }
+    }
+    
+  
+    clrCleanup();
+    return FALSE;
+}
+
+
 void netRuntime() {
 
-    ICLRMetaHost* pClrHost = NULL;
-    HRESULT hr = CLRCreateInstance(CLSID_CLRMetaHost, IID_ICLRMetaHost, (LPVOID*)&pClrHost);
+    OutputDebugString(L"Runtime");
+    HRESULT hr;
+    BOOL f = StartCLR(L"v4.0.30319");
 
-    ICLRRuntimeInfo* pRuntimeInfo = NULL;
-    pClrHost->GetRuntime(L"v4.0.30319", IID_ICLRRuntimeInfo, (LPVOID*)&pRuntimeInfo);
-
-    ICLRRuntimeHost* pClrRuntimeHost = NULL;
-    pRuntimeInfo->GetInterface(CLSID_CLRRuntimeHost, IID_ICLRRuntimeHost, (LPVOID*)&pClrRuntimeHost);
-
-    hr = pClrRuntimeHost->Start();
-
-    hr = pClrRuntimeHost->ExecuteInDefaultAppDomain(L"C:\\Users\\Starscream\\Desktop\\NetInjection\\NetInjection\\bin\\Debug\\NetInjection.dll", L"NetInjection.NetPayload", L"showInjection", NULL, NULL);
-    hr = pClrRuntimeHost->Stop();
-
-    pClrRuntimeHost->Release();
+    if (f == TRUE) {
+        DWORD returnVAL;
+        hr = pClrRuntimeHost->ExecuteInDefaultAppDomain(L"C:\\Users\\Starscream\\Desktop\\NetInjection\\NetInjection\\bin\\x64\\Debug\\NetInjection.dll", L"NetInjection.NetPayload", L"showInjection", L"UnManaged", &returnVAL);
+    }
+    else {
+        OutputDebugString(L"CLR LOAD FAILURE");
+    }
+    
 }
+
 
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
@@ -32,11 +92,8 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
+        OutputDebugString(L"Attached!");
         netRuntime();
-        break;
-    case DLL_THREAD_ATTACH:
-    case DLL_THREAD_DETACH:
-    case DLL_PROCESS_DETACH:
         break;
     }
     return TRUE;
