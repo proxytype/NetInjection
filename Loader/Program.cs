@@ -16,79 +16,49 @@ namespace Loader
             return NativeApi.GetProcAddress(h, function);
         }
 
-        static IntPtr injectLibray(string dll, int pid)
-        {
-            //get requested process pointer
+     
+        static void injectDLL(int pid, string payloadPath) {
+
             IntPtr processPtr = NativeApi.OpenProcess(NativeApi.PROCESS_CREATE_THREAD | NativeApi.PROCESS_QUERY_INFORMATION | NativeApi.PROCESS_VM_OPERATION | NativeApi.PROCESS_VM_WRITE | NativeApi.PROCESS_VM_READ, false, pid);
 
             //getting the pointer to LoadLibraryA in kernel32.dll
-            IntPtr loadLibraryPtr = setLibrary("kernel32.dll", "LoadLibraryA");
+            IntPtr loadLibraryPtr = NativeApi.GetProcAddress(NativeApi.GetModuleHandle("kernel32.dll"), "LoadLibraryA");
 
             //allocate payload path
-            IntPtr allocMemAddress = NativeApi.VirtualAllocEx(processPtr, IntPtr.Zero, (uint)((dll.Length + 1) * Marshal.SizeOf(typeof(char))), (uint)NativeApi.AllocationType.Commit | (uint)NativeApi.AllocationType.Reserve, NativeApi.PAGE_READWRITE);
+            IntPtr allocMemAddress = NativeApi.VirtualAllocEx(processPtr, IntPtr.Zero, (uint)((payloadPath.Length + 1) * Marshal.SizeOf(typeof(char))), NativeApi.MEM_COMMIT | NativeApi.MEM_RESERVE, NativeApi.PAGE_READWRITE);
 
             //write to process memory
             UIntPtr bytesWritten;
-            NativeApi.WriteProcessMemory(processPtr, allocMemAddress, Encoding.Default.GetBytes(dll), (uint)((dll.Length + 1) * Marshal.SizeOf(typeof(char))), out bytesWritten);
+            NativeApi.WriteProcessMemory(processPtr, allocMemAddress, Encoding.Default.GetBytes(payloadPath), (uint)((payloadPath.Length + 1) * Marshal.SizeOf(typeof(char))), out bytesWritten);
 
             //create thread in process, execute loadlibrary and call the allocated path
-            IntPtr thread = NativeApi.CreateRemoteThread(processPtr, IntPtr.Zero, 0, loadLibraryPtr, allocMemAddress, 0, IntPtr.Zero);
-            NativeApi.WaitForSingleObject(thread, NativeApi.INFINITE);
+            NativeApi.CreateRemoteThread(processPtr, IntPtr.Zero, 0, loadLibraryPtr, allocMemAddress, 0, IntPtr.Zero);
 
-            NativeApi.FreeLibrary(loadLibraryPtr);
-            NativeApi.WaitForSingleObject(loadLibraryPtr, NativeApi.INFINITE);
-
-            NativeApi.VirtualFreeEx(processPtr, allocMemAddress, 0, NativeApi.AllocationType.Release);
-
-            return processPtr;
         }
 
         static void Main(string[] args)
         {
-            if (args.Length < 4)
+            if (args.Length < 2)
             {
 
-                Console.WriteLine("Execute managed code in unmanaged code:");
-                Console.WriteLine("<Payload Path> <Process Name>");
-                Console.WriteLine("Example:");
-                Console.WriteLine("C:\\payload.dll notepad");
-                Console.WriteLine("By Proxytype - https://github.com/proxytype");
+                Console.WriteLine("Execute managed code in managed code:");
+                Console.WriteLine("By Rudenetworks.com - https://github.com/proxytype");
                 return;
 
             }
 
             string payload = args[0];
             string injectTo = args[1];
-            string payloadFunc = args[2];
-            string payloadFuncArg = args[3];
+           
 
             Process[] ps = Process.GetProcessesByName(injectTo);
 
             if (ps.Length != 0)
             {
-                //remote process injection
-                IntPtr remoteProcess = injectLibray(payload, ps[0].Id);
 
-                //local process injection
-                IntPtr localProcess = injectLibray(payload, Process.GetCurrentProcess().Id);
-
-                //get injection function address from local process
-                IntPtr injectFunction = NativeApi.GetProcAddress(NativeApi.GetModuleHandle(payload), payloadFunc);
-
-                NativeApi.CloseHandle(localProcess);
-
-                byte[] funcArgs = Encoding.Unicode.GetBytes(payloadFuncArg);
-
-                IntPtr allocMemAddress = NativeApi.VirtualAllocEx(remoteProcess, IntPtr.Zero, (uint)funcArgs.Length + 1, (uint)NativeApi.AllocationType.Commit | (uint)NativeApi.AllocationType.Reserve, NativeApi.PAGE_READWRITE);
-
-                UIntPtr bytesWritten;
-                NativeApi.WriteProcessMemory(remoteProcess, allocMemAddress, funcArgs, (uint)funcArgs.Length + 1, out bytesWritten);
-
-                IntPtr thread = NativeApi.CreateRemoteThread(remoteProcess, IntPtr.Zero, 0, injectFunction, allocMemAddress, 0, IntPtr.Zero);
-                NativeApi.WaitForSingleObject(thread, NativeApi.INFINITE);
-
-                NativeApi.VirtualFreeEx(remoteProcess, allocMemAddress, 0, NativeApi.AllocationType.Release);
-                NativeApi.CloseHandle(remoteProcess);
+                injectDLL(ps[0].Id, payload);
+                Console.ReadKey();
+               
             }
         }
     }

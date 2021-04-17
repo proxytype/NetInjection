@@ -55,6 +55,8 @@ namespace Loader
 
         public const UInt32 INFINITE = 0xFFFFFFFF;
         public const uint PAGE_READWRITE = 4;
+        public const uint MEM_COMMIT = 0x00001000;
+        public const uint MEM_RESERVE = 0x00002000;
 
         public enum AllocationType
         {
